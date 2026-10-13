@@ -1,0 +1,6 @@
+# Root ignore rules (web/.gitignore covers the app itself)
+node_modules/
+.DS_Store
+Thumbs.db
+desktop.ini
+.env*

@@ -52,7 +52,7 @@ const AMENITY_ICON: Record<Amenity, typeof WifiHighIcon> = {
 export const dynamic = "force-dynamic";
 
 export async function generateMetadata({ params }: { params: Promise<{ slug: string }> }): Promise<Metadata> {
-  const p = getPublicProperty((await params).slug);
+  const p = await getPublicProperty((await params).slug);
   return p ? { title: `${p.name}, ${p.city}: day use from K ${p.hourlyRate}/h`, description: p.summary } : {};
 }
 
@@ -78,7 +78,7 @@ export default async function PropertyPage({
   params: Promise<{ slug: string }>;
   searchParams: Promise<Record<string, string | undefined>>;
 }) {
-  const p = getPublicProperty((await params).slug);
+  const p = await getPublicProperty((await params).slug);
   if (!p) notFound();
   const sp = await searchParams;
   const unitHeading = p.type === "hotel" ? "Rooms available for day use" : p.type === "lodge" ? "Day packages" : "The apartment";

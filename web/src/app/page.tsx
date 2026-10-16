@@ -38,7 +38,7 @@ const USE_CASES = [
 export const dynamic = "force-dynamic";
 
 export default async function Home() {
-  const all = getPublicCatalog();
+  const all = await getPublicCatalog();
   const featured = all.filter((p) => p.featured && p.status === "available").slice(0, 6);
   const byId = Object.fromEntries(all.map((p) => [p.id, p]));
   const hero = byId["p09"];

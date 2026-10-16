@@ -1,9 +1,7 @@
 import "server-only";
-import fs from "node:fs";
-import path from "node:path";
 import crypto from "node:crypto";
 import type { Amenity, PropertyType } from "@/lib/types";
-import { UPLOAD_DIR } from "./db";
+import { store } from "./db";
 
 export const MAX_PHOTOS = 20;
 export const MIN_PHOTOS = 3;
@@ -84,7 +82,6 @@ function sniff(buf: Buffer): "jpg" | "png" | "webp" | null {
 export async function savePhotos(files: File[]): Promise<{ ids: string[]; errors: string[] }> {
   const ids: string[] = [];
   const errors: string[] = [];
-  fs.mkdirSync(UPLOAD_DIR, { recursive: true });
   for (const f of files) {
     if (f.size > MAX_BYTES) {
       errors.push(`${f.name}: larger than 10 MB`);
@@ -97,13 +94,21 @@ export async function savePhotos(files: File[]): Promise<{ ids: string[]; errors
       continue;
     }
     const id = `${crypto.randomBytes(12).toString("hex")}.${ext}`;
-    fs.writeFileSync(path.join(UPLOAD_DIR, id), buf);
-    ids.push(id);
+    try {
+      await store.putPhoto(id, buf, PHOTO_TYPES[ext]);
+      ids.push(id);
+    } catch (e) {
+      console.error(e);
+      errors.push(`${f.name}: couldn't be saved, try again`);
+    }
   }
   return { ids, errors };
 }
 
-export function deletePhoto(id: string) {
-  if (!/^[a-f0-9]{24}\.(jpg|png|webp)$/.test(id)) return;
-  fs.rmSync(path.join(UPLOAD_DIR, id), { force: true });
+export const PHOTO_ID = /^[a-f0-9]{24}\.(jpg|png|webp)$/;
+export const PHOTO_TYPES = { jpg: "image/jpeg", png: "image/png", webp: "image/webp" } as const;
+
+export async function deletePhoto(id: string) {
+  if (!PHOTO_ID.test(id)) return;
+  await store.deletePhoto(id);
 }

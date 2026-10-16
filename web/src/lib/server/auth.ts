@@ -1,7 +1,7 @@
 import "server-only";
 import crypto from "node:crypto";
 import { cookies, headers } from "next/headers";
-import { read, type Role, type UserRecord } from "./db";
+import { store, type Role, type UserRecord } from "./db";
 
 const COOKIE = "dt_session";
 const MAX_AGE = 60 * 60 * 24 * 7; // 7 days
@@ -28,17 +28,19 @@ export function passwordProblem(pw: string): string | null {
 }
 
 /* ---------------- Sessions: signed, httpOnly cookie ---------------- */
-function secret() {
-  return process.env.SESSION_SECRET || read().secret;
+async function secret() {
+  const s = process.env.SESSION_SECRET || (await store.fallbackSecret());
+  if (!s) throw new Error("SESSION_SECRET must be set when using Supabase (see web/.env.example)");
+  return s;
 }
 
-function sign(payload: string) {
-  return crypto.createHmac("sha256", secret()).update(payload).digest("base64url");
+async function sign(payload: string) {
+  return crypto.createHmac("sha256", await secret()).update(payload).digest("base64url");
 }
 
 export async function startSession(u: UserRecord) {
   const payload = Buffer.from(JSON.stringify({ uid: u.id, v: u.sessionVersion, exp: Date.now() + MAX_AGE * 1000 })).toString("base64url");
-  (await cookies()).set(COOKIE, `${payload}.${sign(payload)}`, {
+  (await cookies()).set(COOKIE, `${payload}.${await sign(payload)}`, {
     httpOnly: true,
     sameSite: "lax",
     secure: process.env.NODE_ENV === "production",
@@ -57,12 +59,13 @@ export async function currentUser(): Promise<UserRecord | null> {
   if (!raw) return null;
   const [payload, sig] = raw.split(".");
   if (!payload || !sig) return null;
-  const expected = sign(payload);
+  const expected = await sign(payload).catch(() => null);
+  if (!expected) return null; // no signing secret configured, so nobody can be signed in
   if (sig.length !== expected.length || !crypto.timingSafeEqual(Buffer.from(sig), Buffer.from(expected))) return null;
   try {
     const { uid, v, exp } = JSON.parse(Buffer.from(payload, "base64url").toString()) as { uid: string; v: number; exp: number };
     if (Date.now() > exp) return null;
-    const u = read().users.find((x) => x.id === uid);
+    const u = await store.findUserById(uid);
     if (!u || u.blocked || u.sessionVersion !== v) return null;
     return u;
   } catch {

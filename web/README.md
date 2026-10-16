@@ -41,7 +41,32 @@ How it's protected (all enforced on the server):
 - Only **Available** listings can be booked. The other two labels show on the profile and in search, and booking is disabled.
 - Additional protections: cross-site requests are rejected, sign-in attempts are rate-limited, uploads are checked by their actual file bytes (JPG/PNG/WebP, max 10 MB) and stored under random names.
 
-Data lives in `web/.data/` (git-ignored): `db.json` for accounts and listings, `uploads/` for photos. **This is fine for local use and testing, but not for hosting**: before going live, move it to a real database and file storage (for example Postgres + S3, or Supabase). All reads and writes go through `src/lib/server/db.ts` and `src/lib/server/listings.ts`. Set a `SESSION_SECRET` environment variable in production.
+### Where the data is stored
+
+Accounts, listings, labels and photos go through one storage layer (`src/lib/server/store/`) with two backends:
+
+- **Supabase (recommended, required for hosting):** Postgres tables plus a Storage bucket for photos. Used automatically when `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` are set.
+- **Local file (fallback):** `web/.data/` (git-ignored). Used when the Supabase variables are empty. Fine for trying things out on one computer.
+
+#### Connecting Supabase
+
+1. Create a project at [supabase.com](https://supabase.com) and choose a region near Zambia (for example Frankfurt or a South Africa region, if one is offered).
+2. In the dashboard, open **SQL Editor → New query**, paste [`supabase/schema.sql`](supabase/schema.sql) and click **Run**. This creates the `accounts`, `listings` and `seed_statuses` tables (with Row Level Security on) and the `listing-photos` bucket.
+3. Copy `.env.example` to `.env.local` and fill in:
+   - `SUPABASE_URL`: Project Settings → API → Project URL
+   - `SUPABASE_SERVICE_ROLE_KEY`: Project Settings → API → the **service_role / secret** key. Keep it secret: it goes only in `.env.local` and your host's environment settings, never in GitHub.
+   - `SESSION_SECRET`: any long random string (the command is in `.env.example`)
+4. Restart the dev server. Then visit `/admin/setup` to create the master account in Supabase.
+
+### Deploying to Vercel
+
+1. In Vercel: **Add New → Project → Import** the `pablochabala/daytime` GitHub repository.
+2. Set **Root Directory** to `web`. Vercel detects Next.js automatically.
+3. Under **Environment Variables**, add `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `SUPABASE_PHOTO_BUCKET` (`listing-photos`) and `SESSION_SECRET`, then click **Deploy**.
+
+Without the Supabase variables, the site still deploys and the public pages work. Partner sign-up and the master-account setup show a "not switched on yet" message until the database is connected. After adding variables later, redeploy (Deployments → ⋯ → Redeploy).
+
+Security model: the browser never talks to Supabase directly. Only the Next.js server does, using the service-role key. RLS is on with no policies, so the public anon key can't read accounts or listings. The database also enforces "only one master account" and the 50–70% day-pass rule.
 
 > The guest side (`/account`, wishlists, bookings) is still stored in the browser only.
 

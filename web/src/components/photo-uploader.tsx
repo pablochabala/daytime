@@ -98,7 +98,6 @@ export function PhotoUploader({
           type="button"
           onClick={() => inputRef.current?.click()}
           aria-describedby={[hintId, error ? `${id}-err` : ""].filter(Boolean).join(" ")}
-          aria-invalid={!!error || undefined}
           className="inline-flex h-12 items-center gap-2 rounded-[10px] bg-secondary px-5 font-semibold text-bg transition-opacity hover:opacity-90 active:scale-[.98]"
         >
           <UploadSimpleIcon weight="bold" className="size-5" aria-hidden />
